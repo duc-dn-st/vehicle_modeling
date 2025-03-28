@@ -5,10 +5,21 @@ from matplotlib.animation import ArtistAnimation
 
 
 class Animation:
-    def __init__(self, model):
+    def __init__(self, model, reference, controller):
+        """! Constructor
+        """
         self.model = model
 
+        self.reference = reference
+
+        self.controller = controller
+
         self._register_frame()
+
+    def _register_model(self, model):
+        """! Register model
+        """
+        self.model = model
 
     def _register_animation(self, inputs, dt):
         """! Register animation"
@@ -16,12 +27,16 @@ class Animation:
         frame = self._append_robot_frame()
 
         steer, vel = self._append_control_frame()
-        
+
         frame += steer + vel
 
         self.frames.append(frame)
 
     def _register_frame(self):
+
+        self.view_x_lim_min, self.view_x_lim_max = -7.5, 7.5
+
+        self.view_y_lim_min, self.view_y_lim_max = -7.5, 7.5
 
         self.frames = []
 
@@ -31,15 +46,15 @@ class Animation:
 
         self.main_ax.set_aspect('equal')
 
-        self.main_ax.tick_params(
-            labelbottom=True, labelleft=True, labelright=False, labeltop=False)
+        self.main_ax.set_xlim(self.view_x_lim_min, self.view_x_lim_max)
+
+        self.main_ax.set_ylim(self.view_y_lim_min, self.view_y_lim_max)
 
         self.main_ax.tick_params(
-            bottom=True, left=True, right=False, top=False)
+            labelbottom=False, labelleft=False, labelright=False, labeltop=False)
 
-        self.main_ax.set_xlim(auto=True)
-
-        self.main_ax.set_ylim(auto=True)
+        self.main_ax.tick_params(
+            bottom=False, left=False, right=False, top=False)
 
         self.main_ax.set_xlabel('X [m]')
 
@@ -47,11 +62,20 @@ class Animation:
 
         self.main_ax.grid(True)
 
+        self.minimap_ax = plt.subplot2grid((3, 3), (2, 2))
+
         self.steer_ax = plt.subplot2grid((3, 3), (2, 0))
+
+        self.steer_ax.set_title("Steering Angle", fontsize="12")
 
         self.velocity_ax = plt.subplot2grid((3, 3), (2, 1))
 
+        self.velocity_ax.set_title("Velocity", fontsize="12")
+
+        self.fig.tight_layout()
+
     def _append_robot_frame(self):
+
         vw, vl = self.model.width, self.model.length_base
 
         yaw = self.model.theta
@@ -61,8 +85,7 @@ class Animation:
         vehicle_shape_y = [0.0, +0.5*vw, +0.5*vw, -0.5*vw, -0.5*vw]
 
         vehicle_x, vehicle_y = \
-            self._affine_transform(vehicle_shape_x, vehicle_shape_y, yaw, [
-                                   self.model.x_f, self.model.y_f])
+            self._affine_transform(vehicle_shape_x, vehicle_shape_y, yaw, [0, 0])
 
         robot_frame = self.main_ax.plot(
             vehicle_x, vehicle_y, color='blue', linewidth=0.5, zorder=3)
@@ -80,8 +103,7 @@ class Animation:
             wheel_shape_x, wheel_shape_y, 0.0, [-0.3*vl, 0.5*vw])
 
         wheel_rl_x, wheel_rl_y = self._affine_transform(
-            wheel_shape_rl_x, wheel_shape_rl_y, yaw,
-            [self.model.x_f, self.model.y_f])
+            wheel_shape_rl_x, wheel_shape_rl_y, yaw, [0.0, 0.0])
 
         robot_frame += self.main_ax.fill(
             wheel_rl_x, wheel_rl_y, color='black', zorder=3)
@@ -90,7 +112,7 @@ class Animation:
             wheel_shape_x, wheel_shape_y, 0.0, [-0.3*vl, -0.5*vw])
 
         wheel_rl_x, wheel_rl_y = self._affine_transform(
-            wheel_shape_rl_x, wheel_shape_rl_y, yaw, [self.model.x_f, self.model.y_f])
+            wheel_shape_rl_x, wheel_shape_rl_y, yaw, [0.0, 0.0])
 
         robot_frame += self.main_ax.fill(
             wheel_rl_x, wheel_rl_y, color='black', zorder=3)
@@ -99,18 +121,44 @@ class Animation:
             wheel_shape_x, wheel_shape_y, self.model.delta, [0.4*vl, 0.0])
 
         wheel_f_x, wheel_f_y = self._affine_transform(
-            wheel_shape_f_x, wheel_shape_f_y, yaw, [self.model.x_f, self.model.y_f])
-
+            wheel_shape_f_x, wheel_shape_f_y, yaw, [0.0, 0.0])
+        
         robot_frame += self.main_ax.fill(
             wheel_f_x, wheel_f_y, color='black', zorder=3)
 
         robot_frame += self.main_ax.plot(
-            self.model.state[:, 0], self.model.state[:, 1], color='red', linewidth=0.5, zorder=3)
+            self.model.state[:, 0] - self.model.x_f, self.model.state[:, 1] - self.model.y_f, color='red', linewidth=0.5, zorder=3)
+
+        ref_x = self.reference[:, 0] - np.full(self.reference.shape[0], self.model.x_f)
+
+        ref_y = self.reference[:, 1] - np.full(self.reference.shape[0], self.model.y_f)
+
+        robot_frame += self.main_ax.plot(ref_x, ref_y, color='black', linestyle='dashed')
+
+        # Calculate the error
+        robot_position = self.model.state[:1]  # Robot's current position (x, y)
+        nearest_reference = self.reference[self.controller.previous_index, :1]  # Nearest reference point (x, y)
+        error = np.linalg.norm(robot_position - nearest_reference)  # Euclidean distance
+
+        # Plot the robot's position on the minimap
+        robot_frame += self.minimap_ax.plot(
+            error, 'ro', label='Robot', zorder=3
+)
+
+
+
+        # robot_frame += self.minimap_ax.plot
+        # rotated_vehicle_shape_x_minimap, rotated_vehicle_shape_y_minimap = \
+        #     self._affine_transform(vehicle_shape_x, vehicle_shape_y, yaw, [self.model.x_f, self.model.y_f])
+        
+        # robot_frame += self.minimap_ax.plot(rotated_vehicle_shape_x_minimap, rotated_vehicle_shape_y_minimap, color='black', linewidth=2.0, zorder=3)
+
+        # robot_frame += self.minimap_ax.fill(rotated_vehicle_shape_x_minimap, rotated_vehicle_shape_y_minimap, color='white', zorder=2)
 
         return robot_frame
 
     def _append_control_frame(self):
-        # steering angle
+        # steering angle            
         steer = np.abs(self.model.delta)
 
         if self.model.delta < 0.0:
@@ -185,6 +233,6 @@ class Animation:
     def show_animation(self, interval_ms):
 
         ani = ArtistAnimation(self.fig, self.frames,
-                              interval=interval_ms, repeat=True)
+                              interval=interval_ms, repeat=True)        
 
         plt.show()

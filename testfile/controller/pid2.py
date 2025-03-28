@@ -1,15 +1,16 @@
+import pandas as pd
+import numpy as np
 import sys
 sys.path.append('.')
-import numpy as np
-import pandas as pd
 
-from models.bicycle_model import BicycleModel
-from animation.animation import Animation
-import matplotlib.pyplot as plt
 from matplotlib.animation import ArtistAnimation
+import matplotlib.pyplot as plt
+from animation.animation import Animation
+from models.bicycle_model import BicycleModel
+from references.reference import Reference
 
 class PID:
-    def   __init__(self, model, reference):
+    def __init__(self, model, reference):
         """! Constructor
         """
         self.model = model
@@ -41,39 +42,46 @@ class PID:
         """! Register reference
         """
         self.target_state = reference
-    
+
     def _calculate_tracking_error(self, observed_state):
         """! Calculate tracking error
         """
         idx = self._get_nearest_reference(observed_state)
 
-        longitudinal_error = np.sqrt((self.target_state[idx, 0] - observed_state[0])**2 + (self.target_state[idx, 1] - observed_state[1])**2)
+        x1, y1 = self.target_state[idx, 0], self.target_state[idx, 1]
 
-        heading_error = self.target_state[idx, 2] - observed_state[2]
+        x2, y2 = self.target_state[idx, 0] + 1.0 * np.cos(self.target_state[idx, 2]), self.target_state[idx, 1] + 1.0*np.sin(self.target_state[idx, 2])
 
-        return longitudinal_error, heading_error
+        vx, vy = x2 - x1, y2 - y1
+
+        wx, wy = observed_state[0] - x1,  observed_state[1] - y1
+
+        s = vx * wy - vy * wx
+
+        tracking_error = -np.sign(s) * np.sqrt((self.target_state[idx, 0] - observed_state[0])**2 + (
+            self.target_state[idx, 1] - observed_state[1])**2)
+
+        return tracking_error
 
     def _calculate_control_input(self, observed_state, dt):
         """! Calculate control input
         """
-        long_e, head_e = self._calculate_tracking_error(observed_state)
+        long_e = self._calculate_tracking_error(observed_state)
 
-        long_ie = self.pre_integral_long_ie + (long_e + self.pre_long_e) * dt / 2.0
+        long_ie = self.pre_integral_long_ie + \
+            (long_e + self.pre_long_e) * dt / 2.0
 
         long_de = (long_e - self.pre_long_e) / dt
 
-        heading_ie = self.pre_integral_head_ie + (head_e + self.pre_head_e) * dt / 2.0
+        steering = self.kp * long_e + self.ki * long_ie + self.kd * long_de
 
-        heading_de = (head_e - self.pre_head_e) / dt
+        if steering > self.model.max_steering_angle:
 
-        # PID control
-        velocity = self.kp * long_e + self.ki * long_ie + self.kd * long_de
+            steering = self.model.max_steering_angle
 
-        steering = self.kp * head_e + self.ki * heading_ie + self.kd * heading_de
+        self.pre_long_e = long_e
 
-        self.pre_long_e, self.pre_head_e = long_e, head_e
-
-        return velocity, steering
+        return steering
 
     def _get_nearest_reference(self, observed_state):
         """! Get nearest reference
@@ -82,9 +90,11 @@ class PID:
 
         previous_index = self.previous_index
 
-        dx = [observed_state[0] - self.target_state[i, 0] for i in range(previous_index, previous_index + search_index_length)]
+        dx = [observed_state[0] - self.target_state[i, 0]
+              for i in range(previous_index, previous_index + search_index_length)]
 
-        dy = [observed_state[1] - self.target_state[i, 1] for i in range(previous_index, previous_index + search_index_length)]
+        dy = [observed_state[1] - self.target_state[i, 1]
+              for i in range(previous_index, previous_index + search_index_length)]
 
         d = [idx ** 2 + idy ** 2 for (idx, idy) in zip(dx, dy)]
 
@@ -95,43 +105,38 @@ class PID:
         self.previous_index = nearest_index
 
         return nearest_index
-    
+
+
 model = BicycleModel()
 
-model.x_f, model.y_f, model.theta = 0.0, 0.2, 0.0
+model.x_f, model.y_f, model.theta = 0.0, 0.3, 0.0
 
 model.state = np.array([model.x_f, model.y_f, model.theta])
 
-animation = Animation(model)
-
 # reference trajectory
-data = pd.read_csv('references/ovalpath.csv')
 
-ref_x = data['x'].values
+reference = Reference()
 
-ref_y = data['y'].values
-
-ref_theta = data['yaw'].values
-
-reference = np.vstack([ref_x, ref_y, ref_theta]).T
+reference = reference._register_reference('references/ovalpath')
 
 # simulation settings
-sim_step = len(ref_x) # [step]
+sim_step = reference.shape[0]  # [step]
 
-delta_t = 0.1 # [s]
+delta_t = 0.1  # [s]
 
 # controller settings
 controller = PID(model, reference)
 
-for i in range(sim_step):
+animation = Animation(model, reference, controller)
 
-    velocity, steering = controller._calculate_control_input([model.x_f, model.y_f, model.theta], delta_t)
+for i in range(300):
 
-    print(f'velocity: {velocity}, steering: {steering}') 
+    velocity = 1.0
+
+    steering = controller._calculate_control_input(
+        [model.x_f, model.y_f, model.theta], delta_t)
 
     model._update_state([velocity, steering], delta_t)
-
-    print(f'x_f: {model.x_f}, y_f: {model.y_f}, theta: {model.theta}')
 
     model.v_f, model.delta = velocity, steering
 
