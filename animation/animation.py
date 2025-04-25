@@ -150,29 +150,6 @@ class Animation:
                 past_positions[:, 0] - self.model.x_f + 0.4*vl*np.cos(yaw), past_positions[:, 1] - self.model.y_f + 0.4*vl*np.sin(yaw), 'r-', label='Robot', zorder=3
             )
 
-        robot_position = self.model.state[:2]
-
-        robot_frame += self.main_ax.plot(
-            robot_position[0], robot_position[1], 'ro', label='Robot', zorder=3)
-
-        nearest_reference = self.reference[self.controller.previous_index][:2]
-        
-        error = np.linalg.norm(robot_position - nearest_reference)
-
-        self.past_errors.append(error)
-
-        averaged_error = np.mean(self.past_errors) if self.past_errors else 0.0
-        
-        robot_frame += [self.main_ax.text(0, -1, f"{averaged_error:+.2f} " + r"$ \rm{[m]}$", size=14,
-                                           horizontalalignment='center', verticalalignment='center', fontfamily='monospace')]
-
-        # robot_frame += self.minimap_ax.plot(
-        #     error, 'ro', label='Robot', zorder=3)
-
-        # if len(self.past_errors) > 1:
-        #     robot_frame += self.minimap_ax.plot(
-        #         range(len(self.past_errors)), self.past_errors, 'r-', label='Error History', zorder=2)
-
         return robot_frame
 
     def _append_control_frame(self):
