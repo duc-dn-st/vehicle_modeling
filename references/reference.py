@@ -8,7 +8,7 @@ class Reference:
         """
         pass
 
-    def _register_reference(self, reference_name: str):
+    def register_reference(self, reference_name: str):
         """! Register reference
         """
         data = pd.read_csv(f'{reference_name}.csv')

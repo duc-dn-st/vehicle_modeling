@@ -49,11 +49,9 @@ class BicycleModel:
 
         self.delta = 0.0
 
-    def _update_state(self, input, dt):
+    def update_state(self, input, dt):
         """! Update state with kinematic
         """
-        self.state = self.state.reshape(-1, 3)
-
         self.v_f = input[0]
 
         self.delta = input[1]
