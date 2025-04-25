@@ -26,7 +26,7 @@ class PID:
 
         self._register_controller_parameters()
 
-        self._register_reference(reference)
+        self.register_reference(reference)
 
     def _register_controller_parameters(self):
         """! Register controller parameters
@@ -37,7 +37,7 @@ class PID:
 
         self.kd = +0.1
 
-    def _register_reference(self, reference):
+    def register_reference(self, reference):
         """! Register reference
         """
         self.target_state = reference

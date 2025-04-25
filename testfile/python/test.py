@@ -8,7 +8,7 @@ from references.reference import Reference
 
 reference = Reference()
 
-reference._register_reference('references/ovalpath')
+reference.register_reference('references/ovalpath')
 
 print(reference.x)
 

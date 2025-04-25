@@ -1,13 +1,10 @@
-import pandas as pd
 import numpy as np
 import sys
 sys.path.append('.')
 
-from matplotlib.animation import ArtistAnimation
-import matplotlib.pyplot as plt
-from animation.animation import Animation
 from models.bicycle_model import BicycleModel
 from references.reference import Reference
+
 
 class PID:
     def __init__(self, model, reference):
@@ -63,30 +60,6 @@ class PID:
 
         return tracking_error
 
-    def _calculate_control_input(self, observed_state, dt):
-        """! Calculate control input
-        """
-        long_e = self._calculate_tracking_error(observed_state)
-
-        long_ie = self.pre_integral_long_ie + \
-            (long_e + self.pre_long_e) * dt / 2.0
-
-        long_de = (long_e - self.pre_long_e) / dt
-
-        steering = self.kp * long_e + self.ki * long_ie + self.kd * long_de
-
-        if steering >= self.model.max_steering_angle:
-
-            steering = self.model.max_steering_angle
-
-        elif steering <= -self.model.max_steering_angle:
-
-            steering = -self.model.max_steering_angle
-
-        self.pre_long_e = long_e
-
-        return steering
-
     def _get_nearest_reference(self, observed_state):
         """! Get nearest reference
         """
@@ -110,40 +83,26 @@ class PID:
 
         return nearest_index
 
+    def calculate_input(self, observed_state, dt):
+        """! Calculate control input
+        """
+        long_e = self._calculate_tracking_error(observed_state)
 
-model = BicycleModel()
+        long_ie = self.pre_integral_long_ie + \
+            (long_e + self.pre_long_e) * dt / 2.0
 
-model.x_f, model.y_f, model.theta = -0.1, 0.4, 0.0
+        long_de = (long_e - self.pre_long_e) / dt
 
-model.state = np.array([model.x_f, model.y_f, model.theta])
+        steering = self.kp * long_e + self.ki * long_ie + self.kd * long_de
 
-# reference trajectory
+        if steering >= self.model.max_steering_angle:
 
-reference = Reference()
+            steering = self.model.max_steering_angle
 
-reference = reference.register_reference('references/ovalpath')
+        elif steering <= -self.model.max_steering_angle:
 
-# simulation settings
-sim_step = reference.shape[0]  # [step]
+            steering = -self.model.max_steering_angle
 
-delta_t = 0.1  # [s]
+        self.pre_long_e = long_e
 
-# controller settings
-controller = PID(model, reference)
-
-animation = Animation(model, reference, controller)
-
-for i in range(1000):
-
-    velocity = 0.5
-
-    steering = controller._calculate_control_input(
-        [model.x_f, model.y_f, model.theta], delta_t)
-
-    model.update_state([velocity, steering], delta_t)
-
-    animation.update([model.x_f, model.y_f, model.theta])
-
-    animation._register_animation([velocity, steering], delta_t)
-
-animation.show_animation(0.1)
+        return steering

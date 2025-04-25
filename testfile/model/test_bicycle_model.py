@@ -46,7 +46,7 @@ class BicycleModel:
         self.steer_ax = plt.subplot2grid((3, 3), (2, 0))
         self.velocity_ax = plt.subplot2grid((3, 3), (2, 1))
 
-    def _update_state(self, input, dt):
+    def update_state(self, input, dt):
         self.state = self.state.reshape(-1, 3)
         self.v_f = input[0]
         self.delta = input[1]
@@ -181,6 +181,6 @@ for step in range(steps):
     velocity = np.random.uniform(0.2, 0.7)
     steering = (np.pi / 6) * np.sin(0.5 * step * dt)
 
-    bicycle_model._update_state([velocity, steering], dt)
+    bicycle_model.update_state([velocity, steering], dt)
 
 bicycle_model.show_animation(interval)
