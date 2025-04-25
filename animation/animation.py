@@ -40,6 +40,10 @@ class Animation:
 
         self.frames = []
 
+        self.past_errors = []
+
+        self.past_positions = []
+
         self.fig = plt.figure(figsize=(9, 9))
 
         self.main_ax = plt.subplot2grid((3, 3), (0, 0), rowspan=2, colspan=3)
@@ -60,7 +64,7 @@ class Animation:
 
         self.main_ax.set_ylabel('Y [m]')
 
-        self.main_ax.grid(True)
+        self.main_ax.grid(False)
 
         self.minimap_ax = plt.subplot2grid((3, 3), (2, 2))
 
@@ -85,7 +89,8 @@ class Animation:
         vehicle_shape_y = [0.0, +0.5*vw, +0.5*vw, -0.5*vw, -0.5*vw]
 
         vehicle_x, vehicle_y = \
-            self._affine_transform(vehicle_shape_x, vehicle_shape_y, yaw, [0, 0])
+            self._affine_transform(
+                vehicle_shape_x, vehicle_shape_y, yaw, [0, 0])
 
         robot_frame = self.main_ax.plot(
             vehicle_x, vehicle_y, color='blue', linewidth=0.5, zorder=3)
@@ -122,43 +127,55 @@ class Animation:
 
         wheel_f_x, wheel_f_y = self._affine_transform(
             wheel_shape_f_x, wheel_shape_f_y, yaw, [0.0, 0.0])
-        
+
         robot_frame += self.main_ax.fill(
-            wheel_f_x, wheel_f_y, color='black', zorder=3)
+            wheel_f_x, wheel_f_y, color='red', zorder=3)
 
         robot_frame += self.main_ax.plot(
-            self.model.state[:, 0] - self.model.x_f, self.model.state[:, 1] - self.model.y_f, color='red', linewidth=0.5, zorder=3)
+            self.model.state[0] - self.model.x_f, self.model.state[1] - self.model.y_f, color='red', linewidth=0.5, zorder=3)
 
-        ref_x = self.reference[:, 0] - np.full(self.reference.shape[0], self.model.x_f)
+        ref_x = self.reference[:, 0] - \
+            np.full(self.reference.shape[0], self.model.x_f)
 
-        ref_y = self.reference[:, 1] - np.full(self.reference.shape[0], self.model.y_f)
+        ref_y = self.reference[:, 1] - \
+            np.full(self.reference.shape[0], self.model.y_f)
 
-        robot_frame += self.main_ax.plot(ref_x, ref_y, color='black', linestyle='dashed')
+        robot_frame += self.main_ax.plot(ref_x,
+                                         ref_y, color='black', linestyle='dashed')
 
-        # Calculate the error
-        robot_position = self.model.state[:1]  # Robot's current position (x, y)
-        nearest_reference = self.reference[self.controller.previous_index, :1]  # Nearest reference point (x, y)
-        error = np.linalg.norm(robot_position - nearest_reference)  # Euclidean distance
+        if len(self.past_positions) > 1:
+            past_positions = np.array(self.past_positions)
+            # Plot past positions in the global coordinate system
+            robot_frame += self.main_ax.plot(
+                past_positions[:, 0] - self.model.x_f + 0.4*vl*np.cos(yaw), past_positions[:, 1] - self.model.y_f + 0.4*vl*np.sin(yaw), 'r-', label='Robot', zorder=3
+            )
 
-        # Plot the robot's position on the minimap
-        robot_frame += self.minimap_ax.plot(
-            error, 'ro', label='Robot', zorder=3
-)
+        robot_position = self.model.state[:2]
 
+        robot_frame += self.main_ax.plot(
+            robot_position[0], robot_position[1], 'ro', label='Robot', zorder=3)
 
-
-        # robot_frame += self.minimap_ax.plot
-        # rotated_vehicle_shape_x_minimap, rotated_vehicle_shape_y_minimap = \
-        #     self._affine_transform(vehicle_shape_x, vehicle_shape_y, yaw, [self.model.x_f, self.model.y_f])
+        nearest_reference = self.reference[self.controller.previous_index][:2]
         
-        # robot_frame += self.minimap_ax.plot(rotated_vehicle_shape_x_minimap, rotated_vehicle_shape_y_minimap, color='black', linewidth=2.0, zorder=3)
+        error = np.linalg.norm(robot_position - nearest_reference)
 
-        # robot_frame += self.minimap_ax.fill(rotated_vehicle_shape_x_minimap, rotated_vehicle_shape_y_minimap, color='white', zorder=2)
+        self.past_errors.append(error)
+
+        averaged_error = np.mean(self.past_errors) if self.past_errors else 0.0
+        
+        robot_frame += [self.main_ax.text(0, -1, f"{averaged_error:+.2f} " + r"$ \rm{[m]}$", size=14,
+                                           horizontalalignment='center', verticalalignment='center', fontfamily='monospace')]
+
+        # robot_frame += self.minimap_ax.plot(
+        #     error, 'ro', label='Robot', zorder=3)
+
+        # if len(self.past_errors) > 1:
+        #     robot_frame += self.minimap_ax.plot(
+        #         range(len(self.past_errors)), self.past_errors, 'r-', label='Error History', zorder=2)
 
         return robot_frame
 
     def _append_control_frame(self):
-        # steering angle            
         steer = np.abs(self.model.delta)
 
         if self.model.delta < 0.0:
@@ -230,9 +247,16 @@ class Animation:
 
         return transformed_x, transformed_y
 
+    def update(self, state):
+        """! Update animation
+        """
+        self.model.state = state
+
+        self.past_positions.append(state[:2])
+
     def show_animation(self, interval_ms):
 
         ani = ArtistAnimation(self.fig, self.frames,
-                              interval=interval_ms, repeat=True)        
+                              interval=interval_ms, repeat=True)
 
         plt.show()

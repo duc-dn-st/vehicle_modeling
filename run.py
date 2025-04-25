@@ -1,28 +1,37 @@
 import numpy as np
 from models.bicycle_model import BicycleModel
-# from simulators.time_stepping import TimeStepping
 from animation.animation import Animation
+from references.reference import Reference
+from controller.pid.pid import PID
 
+model = BicycleModel()
+model.x_f, model.y_f, model.theta = -0.1, 0.4, 0.0
+model.state = np.array([model.x_f, model.y_f, model.theta])
 
-total_time = 15
+reference = Reference()
+reference = reference.register_reference('references/ovalpath')
+
+controller = PID(model, reference)
+
+animation = Animation(model, reference, controller)
+
+# ===================================================================
+total_time = 120
 dt = 0.1
 steps = int(total_time / dt)
 interval = 5
 
-model = BicycleModel()
-
-# simulator = TimeStepping(model)
-
-animation = Animation(model)
-
 for step in range(steps):
-    velocity = np.random.uniform(0.2, 0.7)
+    velocity = np.random.uniform(0.6, 0.7)
 
-    steering = (np.pi / 6) * np.sin(0.5 * step * dt)
+    steering = controller.calculate_input(
+        [model.x_f, model.y_f, model.theta], dt)
 
-    steering = 0.0
+    model.update_state([velocity, steering], dt)
 
-    model._update_state([velocity, steering], dt)
+    model.v_f, model.delta = velocity, steering
+
+    animation.update([model.x_f, model.y_f, model.theta])
 
     animation._register_animation([velocity, steering], dt)
 
